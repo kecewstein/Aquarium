@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Aquarium</title>
+
+<style>
+body {
+  background: #bfe9ff;
+  font-family: Arial, sans-serif;
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+}
+
+/* PIXELATED EVERYTHING */
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.panel {
+  background: white;
+  padding: 14px;
+  border-radius: 12px;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+}
+
+canvas {
+  border: 2px solid #333;
+  border-radius: 10px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+.tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tools button {
+  font-size: 18px;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  background: #eee;
+}
+
+.tools button.active {
+  border-color: #2196f3;
+  background: #e3f2fd;
+}
+
+input, select, button {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- DRAW PANEL -->
+<div class="panel">
+  <h3>Warnai Ikanmu! 🎨</h3>
+  <canvas id="drawCanvas" width="300" height="300"></canvas>
+
+  <div class="label">Peralatan</div>
+  <div class="tools">
+    <button data-tool="brush" class="active">Marker🖌️</button>
+    <button data-tool="marker">Marker✏️</button>
+    <button data-tool="soft">Spray1💨</button>
+    <button data-tool="hard">Spray2💨</button>
+    <button data-tool="eraser">Eraser🧽</button>
+    <button id="undo">Undo↩️</button>
+  </div>
+
+  <div class="label">Warna</div>
+  <input type="color" id="color" value="#ff8844">
+
+  <div class="label">Ketebalan</div>
+  <input type="range" id="size" min="2" max="25" value="8">
+
+  <button id="reset">Reset Drawing</button>
+
+  <div class="label">Beri nama ikanmu!</div>
+  <input type="text" id="fishName" placeholder="Nama">
+  <div style="display:flex;align-items:center;gap:4px;">
+    <span style="font-weight:bold;">@</span>
+    <input type="text" id="fishIG" placeholder="Instagram" style="flex:1;">
+  </div>
+
+  <button id="spawn">Bawa ikanmu ke laut! 🐟</button>
+</div>
+
+<!-- SEA PANEL -->
+<div class="panel">
+  <h3>Laut 🌊</h3>
+
+  <div class="label">Pilih lautmu</div>
+  <select id="bgSelect">
+    <option value="shallow">🌤️ Samudera</option>
+    <option value="deep">🌊 Palung Mariana</option>
+    <option value="sunset">🌅 Laut Sunset</option>
+  </select>
+
+  <canvas id="seaCanvas" width="560" height="360"></canvas>
+</div>
+
+<script>
+/* ================= DRAW CANVAS ================= */
+const drawCanvas = document.getElementById("drawCanvas");
+const dCtx = drawCanvas.getContext("2d");
+
+let currentTool = "brush";
+let drawing = false;
+let history = [];
+
+const colorPicker = document.getElementById("color");
+const sizePicker = document.getElementById("size");
+
+document.querySelectorAll(".tools button[data-tool]").forEach(btn=>{
+  btn.onclick=()=>{
+    currentTool=btn.dataset.tool;
+    document.querySelectorAll(".tools button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+  };
+});
+
+function saveState(){
+  history.push(drawCanvas.toDataURL());
+  if(history.length>20) history.shift();
+}
+
+undo.onclick=()=>{
+  if(!history.length) return;
+  const img=new Image();
+  img.src=history.pop();
+  img.onload=()=>dCtx.drawImage(img,0,0);
+};
+
+/* FISH OUTLINE */
+let fishPath;
+function createFishPath(){
+  const p=new Path2D();
+  p.moveTo(240,150);
+  p.quadraticCurveTo(210,95,140,105);
+  p.quadraticCurveTo(80,120,70,150);
+  p.quadraticCurveTo(80,180,140,195);
+  p.quadraticCurveTo(210,205,240,150);
+  p.moveTo(70,150);
+  p.quadraticCurveTo(40,120,25,110);
+  p.quadraticCurveTo(30,150,25,190);
+  p.quadraticCurveTo(40,180,70,150);
+  return p;
+}
+
+function drawOutline(){
+  fishPath=createFishPath();
+  dCtx.clearRect(0,0,300,300);
+  dCtx.lineWidth=3;
+  dCtx.strokeStyle="black";
+  dCtx.stroke(fishPath);
+  saveState();
+}
+drawOutline();
+
+drawCanvas.onmousedown=()=>{drawing=true;saveState();};
+drawCanvas.onmouseup=()=>drawing=false;
+drawCanvas.onmouseleave=()=>drawing=false;
+
+drawCanvas.onmousemove=e=>{
+  if(!drawing) return;
+  dCtx.save();
+  dCtx.clip(fishPath);
+  let r=sizePicker.value;
+  if(currentTool==="marker") r*=1.6;
+  if(currentTool==="soft") r*=2;
+
+  if(currentTool==="eraser"){
+    dCtx.globalCompositeOperation="destination-out";
+  } else {
+    dCtx.globalCompositeOperation="source-over";
+    dCtx.fillStyle=colorPicker.value;
+  }
+
+  dCtx.beginPath();
+  dCtx.arc(e.offsetX,e.offsetY,r,0,Math.PI*2);
+  dCtx.fill();
+  dCtx.restore();
+};
+
+reset.onclick=drawOutline;
+
+/* ================= SEA ================= */
+const seaCanvas=document.getElementById("seaCanvas");
+const sCtx=seaCanvas.getContext("2d");
+const bgSelect=document.getElementById("bgSelect");
+
+const fishes=[], bubbles=[], plankton=[], sparkles=[];
+let selectedFish = null;
+
+const seaweed=Array.from({length:8},(_,i)=>({x:40+i*65,phase:Math.random()*Math.PI}));
+
+for(let i=0;i<40;i++){
+  plankton.push({x:Math.random()*560,y:Math.random()*360,v:0.1+Math.random()*0.2});
+}
+
+class Fish{
+  constructor(img,name,ig){
+    this.img=img; this.name=name; this.ig=ig;
+    this.x=-80;
+    this.y=80+Math.random()*200;
+    this.speed=0.6;
+    this.phase=Math.random()*Math.PI*2;
+    this.showBubble=false;
+  }
+  update(){
+    this.x+=this.speed;
+    this.phase+=0.05;
+    this.y+=Math.sin(this.phase)*0.2;
+    if(this.x>560+80)this.x=-80;
+  }
+  draw(){
+    const sway=Math.sin(this.phase)*6;
+    sCtx.save();
+    sCtx.translate(this.x,this.y);
+    sCtx.drawImage(this.img,40,-30+sway,-80,60);
+
+    /* eye */
+    sCtx.fillStyle="white";
+    sCtx.beginPath();
+    sCtx.arc(18,-5+sway,5,0,Math.PI*2); sCtx.fill();
+    sCtx.fillStyle="black";
+    sCtx.beginPath();
+    sCtx.arc(20,-5+sway,2,0,Math.PI*2); sCtx.fill();
+    sCtx.restore();
+
+    sCtx.fillStyle="white";
+    sCtx.font="12px Arial";
+    sCtx.fillText(this.name,this.x-20,this.y-40);
+    if(this.ig){
+      sCtx.font="10px Arial";
+      sCtx.fillText(this.ig,this.x-20,this.y-26);
+    }
+
+    /* BUBBLE CHAT */
+    if(this.showBubble){
+      sCtx.fillStyle="white";
+      sCtx.strokeStyle="black";
+      sCtx.lineWidth=2;
+      sCtx.beginPath();
+      sCtx.roundRect(this.x-40,this.y-85,140,32,8);
+      sCtx.fill();
+      sCtx.stroke();
+      sCtx.fillStyle="black";
+      sCtx.font="12px Arial";
+      sCtx.fillText("Uwais Al-Qorni",this.x-30,this.y-64);
+    }
+  }
+  hit(mx,my){
+    return mx>this.x-40 && mx<this.x+40 && my>this.y-30 && my<this.y+30;
+  }
+}
+
+spawn.onclick=()=>{
+  const img=new Image();
+  img.src=drawCanvas.toDataURL();
+  const ig=fishIG.value.trim()? "@"+fishIG.value.trim():"";
+  img.onload=()=>fishes.push(new Fish(img,fishName.value||"Fish",ig));
+};
+
+seaCanvas.onclick=e=>{
+  const r=seaCanvas.getBoundingClientRect();
+  const mx=e.clientX-r.left;
+  const my=e.clientY-r.top;
+  selectedFish=null;
+  fishes.forEach(f=>f.showBubble=false);
+  fishes.forEach(f=>{
+    if(f.hit(mx,my)){
+      selectedFish=f;
+      f.showBubble=true;
+    }
+  });
+};
+
+/* ENVIRONMENT */
+function drawSea(){
+  let g=sCtx.createLinearGradient(0,0,0,360);
+  if(bgSelect.value==="deep"){g.addColorStop(0,"#001f3f");g.addColorStop(1,"#000814");}
+  else if(bgSelect.value==="sunset"){g.addColorStop(0,"#ff9a8b");g.addColorStop(1,"#1e3c72");}
+  else {g.addColorStop(0,"#4fc3f7");g.addColorStop(1,"#01579b");}
+  sCtx.fillStyle=g;
+  sCtx.fillRect(0,0,560,360);
+  sCtx.fillStyle="#d7b98e";
+  sCtx.fillRect(0,320,560,40);
+}
+
+function drawLightRays(t){
+  sCtx.save();
+  sCtx.globalAlpha=0.08;
+  for(let i=0;i<6;i++){
+    sCtx.fillStyle="white";
+    sCtx.fillRect(60*i+Math.sin(t/800+i)*10,0,20,360);
+  }
+  sCtx.restore();
+}
+
+function drawPlankton(){
+  plankton.forEach(p=>{
+    p.y-=p.v;
+    if(p.y<0)p.y=360;
+    sCtx.fillStyle="rgba(200,255,255,0.4)";
+    sCtx.fillRect(p.x,p.y,1,1);
+  });
+  if(Math.random()<0.01)
+    sparkles.push({x:Math.random()*560,y:Math.random()*360,life:30});
+  sparkles.forEach((s,i)=>{
+    s.life--;
+    sCtx.fillStyle="rgba(255,255,255,0.6)";
+    sCtx.fillRect(s.x,s.y,2,2);
+    if(s.life<=0)sparkles.splice(i,1);
+  });
+}
+
+function drawSeaweed(){
+  seaweed.forEach(w=>{
+    w.phase+=0.02;
+    sCtx.strokeStyle="#1b5e20";
+    sCtx.lineWidth=4;
+    sCtx.beginPath();
+    sCtx.moveTo(w.x,320);
+    sCtx.quadraticCurveTo(w.x+Math.sin(w.phase)*18,200,w.x,140);
+    sCtx.stroke();
+  });
+}
+
+function drawBubbles(){
+  if(Math.random()<0.03)bubbles.push({x:Math.random()*560,y:360});
+  bubbles.forEach((b,i)=>{
+    b.y-=0.5;
+    sCtx.strokeStyle="rgba(255,255,255,0.6)";
+    sCtx.beginPath();
+    sCtx.arc(b.x,b.y,3,0,Math.PI*2);
+    sCtx.stroke();
+    if(b.y<0)bubbles.splice(i,1);
+  });
+}
+
+/* WATERMARK — MORE VISIBLE */
+function drawWatermark(){
+  sCtx.save();
+  sCtx.fillStyle="white";
+  sCtx.font="bold 20px Arial";
+  sCtx.shadowColor="black";
+  sCtx.shadowBlur=4;
+  sCtx.fillText("ACSG", 480, 350);
+  sCtx.restore();
+}
+
+function animate(t){
+  drawSea();
+  drawLightRays(t);
+  drawSeaweed();
+  drawPlankton();
+  drawBubbles();
+  fishes.forEach(f=>{f.update();f.draw();});
+  drawWatermark();
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+
+</body>
+</html>
